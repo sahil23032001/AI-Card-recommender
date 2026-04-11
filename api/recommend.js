@@ -1,75 +1,33 @@
-const { createClient } = require("@supabase/supabase-js");
-const crypto = require("crypto");
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const LLM_PROVIDER = process.env.LLM_PROVIDER || "groq";
-const LLM_MODEL = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || "86400");
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
-
-const SYSTEM_PROMPT = `
-You are a credit card recommendation engine for Indian credit cards.
-
-Your role is to recommend the best credit cards based on a user’s spending pattern, preferences, and optional issuer constraints.
-
-You must use only:
-1. The structured user profile
-2. The shortlisted candidate cards
-3. Official evidence from card documents, chunks, and benefit facts
-
-Do not invent benefits, exclusions, fee rules, milestone rules, reward rates, or lounge rules.
-
-Your job:
-- Compare shortlisted cards for the given user
-- Identify which card gives the best real-world value
-- Consider annual fee, fee waiver, lounge access, forex markup, reward/cashback fit, and milestone benefits
-- Mention milestone benefits explicitly if present
-- Mention whether the user is likely to unlock those milestone benefits based on annual spend
-- Mention caveats, exclusions, or missing information clearly
-
-Important:
-- Only recommend cards from the provided shortlisted list
-- If a detail is not clearly present in the evidence, say so
-- Do not assume the best card is the most premium one
-- Prefer fit for the user over generic popularity
-
-Return only valid JSON in this structure:
-{
-  "summary": "Short explanation of the overall recommendation.",
-  "best_card": {
-    "card_slug": "string",
-    "reason": "string",
-    "milestone_benefits": ["string"],
-    "caveats": ["string"]
-  },
-  "alternatives": [
-    {
-      "card_slug": "string",
-      "reason": "string",
-      "milestone_benefits": ["string"],
-      "caveats": ["string"]
-    }
-  ],
-  "confidence": "high | medium | low"
-}
-`;
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: { persistSession: false, autoRefreshToken: false }
+  }
+);
 
 const BANKS = [
-  "SBI Card","HDFC Bank","Axis Bank","ICICI Bank","Kotak Mahindra Bank","IDFC FIRST Bank",
-  "AU Small Finance Bank","American Express India","HSBC India","IndusInd Bank","RBL Bank",
-  "YES BANK","Standard Chartered India","Bank of Baroda","Federal Bank","Punjab National Bank",
-  "Union Bank of India","Canara Bank"
+  "SBI Card",
+  "HDFC Bank",
+  "Axis Bank",
+  "ICICI Bank",
+  "Kotak Mahindra Bank",
+  "IDFC FIRST Bank",
+  "AU Small Finance Bank",
+  "American Express India",
+  "HSBC India",
+  "IndusInd Bank",
+  "RBL Bank",
+  "YES BANK",
+  "Standard Chartered India",
+  "Bank of Baroda",
+  "Federal Bank",
+  "Punjab National Bank",
+  "Union Bank of India",
+  "Canara Bank"
 ];
 
 const CATEGORY_KEYWORDS = {
@@ -96,25 +54,16 @@ const BENEFIT_KEYWORDS = {
   rupay_upi: ["upi", "rupay", "ru-pay"]
 };
 
-function sendJson(res, status, body) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.end(JSON.stringify(body));
-}
-
 function parseRupeeAmount(text) {
   if (!text) return null;
   const cleaned = text.replace(/,/g, "");
-  const lakh = cleaned.match(/(\\d+(?:\\.\\d+)?)\\s*lakh/i);
+  const lakh = cleaned.match(/(\d+(?:\.\d+)?)\s*lakh/i);
   if (lakh) return Math.round(Number(lakh[1]) * 100000);
-  const k = cleaned.match(/(\\d+(?:\\.\\d+)?)\\s*k\\b/i);
+  const k = cleaned.match(/(\d+(?:\.\d+)?)\s*k\b/i);
   if (k) return Math.round(Number(k[1]) * 1000);
-  const rs = cleaned.match(/₹\\s*(\\d+(?:\\.\\d+)?)/i) || cleaned.match(/rs\\.?\\s*(\\d+(?:\\.\\d+)?)/i);
+  const rs = cleaned.match(/₹\s*(\d+(?:\.\d+)?)/i) || cleaned.match(/rs\.?\s*(\d+(?:\.\d+)?)/i);
   if (rs) return Math.round(Number(rs[1]));
-  const plain = cleaned.match(/\\b(\\d{4,7})\\b/);
+  const plain = cleaned.match(/\b(\d{4,7})\b/);
   if (plain) return Math.round(Number(plain[1]));
   return null;
 }
@@ -124,9 +73,9 @@ function detectMonthlySpend(text, body) {
   if (body?.annual_spend) return Math.round(Number(body.annual_spend) / 12);
   if (!text) return null;
 
-  const p1 = /(?:monthly|per month|a month)\\D{0,12}(₹\\s*[\\d,]+|\\d+(?:\\.\\d+)?\\s*lakh|\\d+(?:\\.\\d+)?\\s*k|\\d{4,7})/i;
-  const p2 = /(₹\\s*[\\d,]+|\\d+(?:\\.\\d+)?\\s*lakh|\\d+(?:\\.\\d+)?\\s*k|\\d{4,7})\\s*(?:monthly|per month|a month)/i;
-  const pa = /(?:yearly|annual|per year|a year)\\D{0,12}(₹\\s*[\\d,]+|\\d+(?:\\.\\d+)?\\s*lakh|\\d+(?:\\.\\d+)?\\s*k|\\d{4,7})/i;
+  const p1 = /(?:monthly|per month|a month)\D{0,12}(₹\s*[\d,]+|\d+(?:\.\d+)?\s*lakh|\d+(?:\.\d+)?\s*k|\d{4,7})/i;
+  const p2 = /(₹\s*[\d,]+|\d+(?:\.\d+)?\s*lakh|\d+(?:\.\d+)?\s*k|\d{4,7})\s*(?:monthly|per month|a month)/i;
+  const pa = /(?:yearly|annual|per year|a year)\D{0,12}(₹\s*[\d,]+|\d+(?:\.\d+)?\s*lakh|\d+(?:\.\d+)?\s*k|\d{4,7})/i;
 
   const m = text.match(p1) || text.match(p2);
   if (m) return parseRupeeAmount(m[1]);
@@ -201,7 +150,7 @@ function requestHash(profile) {
 function isFresh(row) {
   const updatedAt = row?.updated_at ? new Date(row.updated_at).getTime() : 0;
   const ageSeconds = (Date.now() - updatedAt) / 1000;
-  return ageSeconds <= CACHE_TTL_SECONDS;
+  return ageSeconds <= 86400;
 }
 
 function overlapCount(listA = [], listB = []) {
@@ -211,6 +160,7 @@ function overlapCount(listA = [], listB = []) {
 
 function scoreCard(card, profile) {
   let score = 0;
+
   if (profile.preferred_bank && card.issuer === profile.preferred_bank) score += 20;
 
   if (profile.max_annual_fee != null) {
@@ -244,7 +194,7 @@ function scoreCard(card, profile) {
 
 function buildKeywordTerms(profile) {
   const terms = [];
-  if (profile.query) terms.push(...profile.query.toLowerCase().split(/\\W+/));
+  if (profile.query) terms.push(...profile.query.toLowerCase().split(/\W+/));
   terms.push(...(profile.spend_categories || []).map((x) => x.replace("_", " ")));
   terms.push(...(profile.desired_benefits || []));
   if (profile.require_lounge) terms.push("lounge");
@@ -256,38 +206,6 @@ function buildKeywordTerms(profile) {
 function scoreChunk(chunk, terms) {
   const text = `${chunk.section || ""} ${chunk.chunk_text || ""}`.toLowerCase();
   return terms.reduce((sum, t) => sum + (text.includes(t.toLowerCase()) ? 1 : 0), 0);
-}
-
-async function callGroq(messages) {
-  if (!GROQ_API_KEY) {
-    throw new Error("GROQ_API_KEY is missing");
-  }
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      messages,
-      temperature: 0.2,
-      response_format: { type: "json_object" }
-    })
-  });
-
-  const raw = await res.text();
-  if (!res.ok) {
-    throw new Error(`Groq error ${res.status}: ${raw}`);
-  }
-
-  const data = JSON.parse(raw);
-  return {
-    provider: "groq",
-    model: data.model || LLM_MODEL,
-    text: data.choices?.[0]?.message?.content || ""
-  };
 }
 
 function safeJsonParse(text) {
@@ -303,17 +221,27 @@ function safeJsonParse(text) {
   }
 }
 
-module.exports = async (req, res) => {
-  if (req.method === "OPTIONS") return sendJson(res, 200, { ok: true });
-  if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
+export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    return res.status(500).json({ error: "GROQ_API_KEY is not configured on the server." });
+  }
 
   const debug = {
-    provider: LLM_PROVIDER,
-    model: LLM_MODEL,
-    hasSupabaseUrl: !!SUPABASE_URL,
-    hasSupabaseKey: !!SUPABASE_SERVICE_ROLE_KEY,
-    hasGroqKey: !!GROQ_API_KEY,
-    hasOpenRouterKey: !!OPENROUTER_API_KEY
+    provider: "groq",
+    model: "llama-3.3-70b-versatile",
+    hasSupabaseUrl: !!process.env.SUPABASE_URL,
+    hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasGroqKey: !!process.env.GROQ_API_KEY
   };
 
   try {
@@ -321,7 +249,7 @@ module.exports = async (req, res) => {
     const profile = normalizeProfile(body);
 
     if (!profile.query && !profile.monthly_spend && !(profile.spend_categories || []).length) {
-      return sendJson(res, 400, {
+      return res.status(400).json({
         error: "Provide either a free-text query or structured spend preferences.",
         debug
       });
@@ -339,7 +267,7 @@ module.exports = async (req, res) => {
 
     if (cachedRow && isFresh(cachedRow)) {
       await supabase.rpc("bump_recommendation_cache_hit", { p_request_hash: hash }).catch(() => null);
-      return sendJson(res, 200, {
+      return res.status(200).json({
         source: "cache",
         request_hash: hash,
         debug,
@@ -364,7 +292,7 @@ module.exports = async (req, res) => {
       .slice(0, 10);
 
     if (!shortlisted.length) {
-      return sendJson(res, 404, { error: "No matching active cards found.", debug });
+      return res.status(404).json({ error: "No matching active cards found.", debug });
     }
 
     const cardIds = shortlisted.map((c) => c.id);
@@ -433,7 +361,7 @@ module.exports = async (req, res) => {
       benefit_facts: factsByCard[card.id] || []
     }));
 
-    const messages = [
+    const finalMessages = [
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
@@ -445,8 +373,34 @@ module.exports = async (req, res) => {
       }
     ];
 
-    const llm = await callGroq(messages);
-    const recommendation = safeJsonParse(llm.text);
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.2,
+        max_tokens: 900,
+        messages: finalMessages,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    const raw = await groqRes.text();
+
+    if (!groqRes.ok) {
+      return res.status(groqRes.status).json({
+        error: "Recommendation failed",
+        details: raw,
+        debug
+      });
+    }
+
+    const data = JSON.parse(raw);
+    const content = data.choices?.[0]?.message?.content || "";
+    const recommendation = safeJsonParse(content);
 
     const responsePayload = {
       parsed_profile: profile,
@@ -461,26 +415,26 @@ module.exports = async (req, res) => {
           request_hash: hash,
           normalized_profile: profile,
           response_json: responsePayload,
-          llm_provider: llm.provider,
-          llm_model: llm.model,
+          llm_provider: "groq",
+          llm_model: "llama-3.3-70b-versatile",
           updated_at: new Date().toISOString()
         },
         { onConflict: "request_hash" }
       );
 
-    return sendJson(res, 200, {
+    return res.status(200).json({
       source: "llm",
-      provider: llm.provider,
-      model: llm.model,
+      provider: "groq",
+      model: "llama-3.3-70b-versatile",
       debug,
       ...responsePayload
     });
-  } catch (error) {
-    console.error("[recommend]", error);
-    return sendJson(res, 500, {
+  } catch (err) {
+    console.error("Groq API error:", err);
+    return res.status(500).json({
       error: "Recommendation failed",
-      details: error.message,
+      details: err.message,
       debug
     });
   }
-};
+}

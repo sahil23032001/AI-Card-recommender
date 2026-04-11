@@ -66,24 +66,10 @@ Return only valid JSON in this structure:
 `;
 
 const BANKS = [
-  "SBI Card",
-  "HDFC Bank",
-  "Axis Bank",
-  "ICICI Bank",
-  "Kotak Mahindra Bank",
-  "IDFC FIRST Bank",
-  "AU Small Finance Bank",
-  "American Express India",
-  "HSBC India",
-  "IndusInd Bank",
-  "RBL Bank",
-  "YES BANK",
-  "Standard Chartered India",
-  "Bank of Baroda",
-  "Federal Bank",
-  "Punjab National Bank",
-  "Union Bank of India",
-  "Canara Bank"
+  "SBI Card","HDFC Bank","Axis Bank","ICICI Bank","Kotak Mahindra Bank","IDFC FIRST Bank",
+  "AU Small Finance Bank","American Express India","HSBC India","IndusInd Bank","RBL Bank",
+  "YES BANK","Standard Chartered India","Bank of Baroda","Federal Bank","Punjab National Bank",
+  "Union Bank of India","Canara Bank"
 ];
 
 const CATEGORY_KEYWORDS = {
@@ -122,13 +108,13 @@ function sendJson(res, status, body) {
 function parseRupeeAmount(text) {
   if (!text) return null;
   const cleaned = text.replace(/,/g, "");
-  const lakh = cleaned.match(/(\d+(?:\.\d+)?)\s*lakh/i);
+  const lakh = cleaned.match(/(\\d+(?:\\.\\d+)?)\\s*lakh/i);
   if (lakh) return Math.round(Number(lakh[1]) * 100000);
-  const k = cleaned.match(/(\d+(?:\.\d+)?)\s*k\b/i);
+  const k = cleaned.match(/(\\d+(?:\\.\\d+)?)\\s*k\\b/i);
   if (k) return Math.round(Number(k[1]) * 1000);
-  const rs = cleaned.match(/₹\s*(\d+(?:\.\d+)?)/i) || cleaned.match(/rs\.?\s*(\d+(?:\.\d+)?)/i);
+  const rs = cleaned.match(/₹\\s*(\\d+(?:\\.\\d+)?)/i) || cleaned.match(/rs\\.?\\s*(\\d+(?:\\.\\d+)?)/i);
   if (rs) return Math.round(Number(rs[1]));
-  const plain = cleaned.match(/\b(\d{4,7})\b/);
+  const plain = cleaned.match(/\\b(\\d{4,7})\\b/);
   if (plain) return Math.round(Number(plain[1]));
   return null;
 }
@@ -138,9 +124,9 @@ function detectMonthlySpend(text, body) {
   if (body?.annual_spend) return Math.round(Number(body.annual_spend) / 12);
   if (!text) return null;
 
-  const p1 = /(?:monthly|per month|a month)\D{0,12}(₹\s*[\d,]+|\d+(?:\.\d+)?\s*lakh|\d+(?:\.\d+)?\s*k|\d{4,7})/i;
-  const p2 = /(₹\s*[\d,]+|\d+(?:\.\d+)?\s*lakh|\d+(?:\.\d+)?\s*k|\d{4,7})\s*(?:monthly|per month|a month)/i;
-  const pa = /(?:yearly|annual|per year|a year)\D{0,12}(₹\s*[\d,]+|\d+(?:\.\d+)?\s*lakh|\d+(?:\.\d+)?\s*k|\d{4,7})/i;
+  const p1 = /(?:monthly|per month|a month)\\D{0,12}(₹\\s*[\\d,]+|\\d+(?:\\.\\d+)?\\s*lakh|\\d+(?:\\.\\d+)?\\s*k|\\d{4,7})/i;
+  const p2 = /(₹\\s*[\\d,]+|\\d+(?:\\.\\d+)?\\s*lakh|\\d+(?:\\.\\d+)?\\s*k|\\d{4,7})\\s*(?:monthly|per month|a month)/i;
+  const pa = /(?:yearly|annual|per year|a year)\\D{0,12}(₹\\s*[\\d,]+|\\d+(?:\\.\\d+)?\\s*lakh|\\d+(?:\\.\\d+)?\\s*k|\\d{4,7})/i;
 
   const m = text.match(p1) || text.match(p2);
   if (m) return parseRupeeAmount(m[1]);
@@ -225,7 +211,6 @@ function overlapCount(listA = [], listB = []) {
 
 function scoreCard(card, profile) {
   let score = 0;
-
   if (profile.preferred_bank && card.issuer === profile.preferred_bank) score += 20;
 
   if (profile.max_annual_fee != null) {
@@ -259,7 +244,7 @@ function scoreCard(card, profile) {
 
 function buildKeywordTerms(profile) {
   const terms = [];
-  if (profile.query) terms.push(...profile.query.toLowerCase().split(/\W+/));
+  if (profile.query) terms.push(...profile.query.toLowerCase().split(/\\W+/));
   terms.push(...(profile.spend_categories || []).map((x) => x.replace("_", " ")));
   terms.push(...(profile.desired_benefits || []));
   if (profile.require_lounge) terms.push("lounge");
@@ -273,40 +258,10 @@ function scoreChunk(chunk, terms) {
   return terms.reduce((sum, t) => sum + (text.includes(t.toLowerCase()) ? 1 : 0), 0);
 }
 
-async function callOpenRouter(messages) {
-  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is missing");
-
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://vercel.app",
-      "X-Title": "ai-card-recommender"
-    },
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      messages,
-      temperature: 0.2,
-      response_format: { type: "json_object" }
-    })
-  });
-
-  const raw = await res.text();
-  if (!res.ok) {
-    throw new Error(`OpenRouter error ${res.status}: ${raw}`);
-  }
-
-  const data = JSON.parse(raw);
-  return {
-    provider: "openrouter",
-    model: data.model || LLM_MODEL,
-    text: data.choices?.[0]?.message?.content || ""
-  };
-}
-
 async function callGroq(messages) {
-  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing");
+  if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is missing");
+  }
 
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -352,13 +307,23 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return sendJson(res, 200, { ok: true });
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
 
+  const debug = {
+    provider: LLM_PROVIDER,
+    model: LLM_MODEL,
+    hasSupabaseUrl: !!SUPABASE_URL,
+    hasSupabaseKey: !!SUPABASE_SERVICE_ROLE_KEY,
+    hasGroqKey: !!GROQ_API_KEY,
+    hasOpenRouterKey: !!OPENROUTER_API_KEY
+  };
+
   try {
     const body = req.body || {};
     const profile = normalizeProfile(body);
 
     if (!profile.query && !profile.monthly_spend && !(profile.spend_categories || []).length) {
       return sendJson(res, 400, {
-        error: "Provide either a free-text query or structured spend preferences."
+        error: "Provide either a free-text query or structured spend preferences.",
+        debug
       });
     }
 
@@ -377,6 +342,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, {
         source: "cache",
         request_hash: hash,
+        debug,
         ...cachedRow.response_json
       });
     }
@@ -398,7 +364,7 @@ module.exports = async (req, res) => {
       .slice(0, 10);
 
     if (!shortlisted.length) {
-      return sendJson(res, 404, { error: "No matching active cards found." });
+      return sendJson(res, 404, { error: "No matching active cards found.", debug });
     }
 
     const cardIds = shortlisted.map((c) => c.id);
@@ -479,17 +445,7 @@ module.exports = async (req, res) => {
       }
     ];
 
-    const provider = (LLM_PROVIDER || "groq").toLowerCase();
-
-    let llm;
-    if (provider === "groq") {
-      llm = await callGroq(messages);
-    } else if (provider === "openrouter") {
-      llm = await callOpenRouter(messages);
-    } else {
-      throw new Error(`Unsupported LLM_PROVIDER: ${LLM_PROVIDER}`);
-    }
-
+    const llm = await callGroq(messages);
     const recommendation = safeJsonParse(llm.text);
 
     const responsePayload = {
@@ -516,13 +472,15 @@ module.exports = async (req, res) => {
       source: "llm",
       provider: llm.provider,
       model: llm.model,
+      debug,
       ...responsePayload
     });
   } catch (error) {
     console.error("[recommend]", error);
     return sendJson(res, 500, {
       error: "Recommendation failed",
-      details: error.message
+      details: error.message,
+      debug
     });
   }
 };

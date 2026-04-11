@@ -4,8 +4,8 @@ const crypto = require("crypto");
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const LLM_PROVIDER = process.env.LLM_PROVIDER || "openrouter";
-const LLM_MODEL = process.env.LLM_MODEL || "openrouter/free";
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "groq";
+const LLM_MODEL = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || "86400");
@@ -292,11 +292,12 @@ async function callOpenRouter(messages) {
     })
   });
 
+  const raw = await res.text();
   if (!res.ok) {
-    throw new Error(`OpenRouter error ${res.status}: ${await res.text()}`);
+    throw new Error(`OpenRouter error ${res.status}: ${raw}`);
   }
 
-  const data = await res.json();
+  const data = JSON.parse(raw);
   return {
     provider: "openrouter",
     model: data.model || LLM_MODEL,
@@ -321,11 +322,12 @@ async function callGroq(messages) {
     })
   });
 
+  const raw = await res.text();
   if (!res.ok) {
-    throw new Error(`Groq error ${res.status}: ${await res.text()}`);
+    throw new Error(`Groq error ${res.status}: ${raw}`);
   }
 
-  const data = await res.json();
+  const data = JSON.parse(raw);
   return {
     provider: "groq",
     model: data.model || LLM_MODEL,
@@ -443,6 +445,7 @@ module.exports = async (req, res) => {
       if (!chunksByCard[ch.card_id]) chunksByCard[ch.card_id] = [];
       chunksByCard[ch.card_id].push({ ...ch, _score: score });
     }
+
     Object.keys(chunksByCard).forEach((cardId) => {
       chunksByCard[cardId] = chunksByCard[cardId]
         .sort((a, b) => b._score - a._score)
@@ -476,10 +479,16 @@ module.exports = async (req, res) => {
       }
     ];
 
-    const llm =
-      LLM_PROVIDER.toLowerCase() === "groq"
-        ? await callGroq(messages)
-        : await callOpenRouter(messages);
+    const provider = (LLM_PROVIDER || "groq").toLowerCase();
+
+    let llm;
+    if (provider === "groq") {
+      llm = await callGroq(messages);
+    } else if (provider === "openrouter") {
+      llm = await callOpenRouter(messages);
+    } else {
+      throw new Error(`Unsupported LLM_PROVIDER: ${LLM_PROVIDER}`);
+    }
 
     const recommendation = safeJsonParse(llm.text);
 

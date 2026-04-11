@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clever Card Finder - Test UI</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f6f6f6; margin:0; padding:40px; }
+    .container { max-width:600px; margin:auto; background:white; padding:25px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+    h2 { margin-top:0; }
+    label { font-weight:bold; display:block; margin-top:12px; }
+    input, select, textarea { width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:8px; }
+    button { margin-top:20px; width:100%; padding:12px; background:black; color:white; border:none; border-radius:8px; font-size:16px; cursor:pointer; }
+    pre { background:#111; color:#0f0; padding:15px; margin-top:20px; border-radius:8px; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Clever Card Finder</h2>
+
+    <label>Monthly Spend (₹)</label>
+    <input type="number" id="monthly_spend" placeholder="40000" />
+
+    <label>Preferred Bank (optional)</label>
+    <select id="preferred_bank">
+      <option value="">No preference</option>
+      <option>SBI Card</option>
+      <option>HDFC Bank</option>
+      <option>Axis Bank</option>
+      <option>ICICI Bank</option>
+      <option>IDFC FIRST Bank</option>
+    </select>
+
+    <label>Spend Categories (comma separated)</label>
+    <input id="categories" placeholder="fuel, dining, online_shopping" />
+
+    <label>Desired Benefits (comma separated)</label>
+    <input id="benefits" placeholder="cashback, lounge, milestone_benefits" />
+
+    <label>Max Annual Fee (optional)</label>
+    <input type="number" id="max_fee" placeholder="2000" />
+
+    <label>Additional Notes</label>
+    <textarea id="notes" placeholder="I travel twice a year and want low forex"></textarea>
+
+    <button onclick="getRecommendation()">Get Recommendation</button>
+
+    <pre id="result">Result will appear here...</pre>
+  </div>
+
+<script>
+async function getRecommendation() {
+  const payload = {
+    monthly_spend: Number(document.getElementById('monthly_spend').value) || null,
+    preferred_bank: document.getElementById('preferred_bank').value || null,
+    spend_categories: document.getElementById('categories').value.split(',').map(v => v.trim()).filter(Boolean),
+    desired_benefits: document.getElementById('benefits').value.split(',').map(v => v.trim()).filter(Boolean),
+    max_annual_fee: Number(document.getElementById('max_fee').value) || null,
+    notes: document.getElementById('notes').value || null
+  };
+
+  document.getElementById('result').textContent = 'Loading...';
+
+  try {
+    const res = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    document.getElementById('result').textContent = 'Error: ' + err.message;
+  }
+}
+</script>
+</body>
+</html>

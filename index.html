@@ -3,77 +3,333 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Clever Card Finder - Test UI</title>
+  <title>AI Card Recommender</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#f6f6f6; margin:0; padding:40px; }
-    .container { max-width:600px; margin:auto; background:white; padding:25px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
-    h2 { margin-top:0; }
-    label { font-weight:bold; display:block; margin-top:12px; }
-    input, select, textarea { width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:8px; }
-    button { margin-top:20px; width:100%; padding:12px; background:black; color:white; border:none; border-radius:8px; font-size:16px; cursor:pointer; }
-    pre { background:#111; color:#0f0; padding:15px; margin-top:20px; border-radius:8px; white-space:pre-wrap; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f6f7fb;
+      color: #111827;
+    }
+    .wrapper {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 16px 60px;
+    }
+    .hero {
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+    }
+    .hero p {
+      margin: 0;
+      color: #4b5563;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+    }
+    .card h2 {
+      margin-top: 0;
+      font-size: 20px;
+    }
+    label {
+      display: block;
+      margin-top: 14px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    input, select, textarea {
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #111827;
+    }
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .chip {
+      border: 1px solid #d1d5db;
+      padding: 9px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      background: white;
+    }
+    .chip.active {
+      background: #111827;
+      color: white;
+      border-color: #111827;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 18px;
+    }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .primary {
+      background: #111827;
+      color: white;
+      flex: 1;
+    }
+    .secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    .result-box {
+      background: #0f172a;
+      color: #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 200px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .mini {
+      color: #6b7280;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .section-title {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #374151;
+    }
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Clever Card Finder</h2>
+  <div class="wrapper">
+    <div class="hero">
+      <h1>AI Card Recommender</h1>
+      <p>
+        Enter your spending pattern, goals, and optional bank preference.
+        This page sends your details to the backend at <code>/api/recommend</code>.
+      </p>
+    </div>
 
-    <label>Monthly Spend (₹)</label>
-    <input type="number" id="monthly_spend" placeholder="40000" />
+    <div class="grid">
+      <div class="card">
+        <h2 class="section-title">Tell us what you need</h2>
 
-    <label>Preferred Bank (optional)</label>
-    <select id="preferred_bank">
-      <option value="">No preference</option>
-      <option>SBI Card</option>
-      <option>HDFC Bank</option>
-      <option>Axis Bank</option>
-      <option>ICICI Bank</option>
-      <option>IDFC FIRST Bank</option>
-    </select>
+        <div class="row">
+          <div>
+            <label for="monthlySpend">Monthly Spend (₹)</label>
+            <input type="number" id="monthlySpend" placeholder="40000" />
+          </div>
+          <div>
+            <label for="preferredBank">Preferred Bank</label>
+            <select id="preferredBank">
+              <option value="">No preference</option>
+              <option value="SBI Card">SBI Card</option>
+              <option value="HDFC Bank">HDFC Bank</option>
+              <option value="Axis Bank">Axis Bank</option>
+              <option value="ICICI Bank">ICICI Bank</option>
+              <option value="IDFC FIRST Bank">IDFC FIRST Bank</option>
+              <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+            </select>
+          </div>
+        </div>
 
-    <label>Spend Categories (comma separated)</label>
-    <input id="categories" placeholder="fuel, dining, online_shopping" />
+        <label>Spend Categories</label>
+        <div class="chips" id="categoryChips"></div>
 
-    <label>Desired Benefits (comma separated)</label>
-    <input id="benefits" placeholder="cashback, lounge, milestone_benefits" />
+        <label>Desired Benefits</label>
+        <div class="chips" id="benefitChips"></div>
 
-    <label>Max Annual Fee (optional)</label>
-    <input type="number" id="max_fee" placeholder="2000" />
+        <div class="row">
+          <div>
+            <label for="maxAnnualFee">Max Annual Fee (₹)</label>
+            <input type="number" id="maxAnnualFee" placeholder="2000" />
+          </div>
+          <div>
+            <label for="preferredNetwork">Preferred Network</label>
+            <select id="preferredNetwork">
+              <option value="">No preference</option>
+              <option value="Visa">Visa</option>
+              <option value="Mastercard">Mastercard</option>
+              <option value="RuPay">RuPay</option>
+              <option value="Diners Club">Diners Club</option>
+              <option value="American Express">American Express</option>
+            </select>
+          </div>
+        </div>
 
-    <label>Additional Notes</label>
-    <textarea id="notes" placeholder="I travel twice a year and want low forex"></textarea>
+        <label for="notes">Additional Notes</label>
+        <textarea id="notes" placeholder="Example: I travel internationally twice a year, want lounge access, and don’t want very high annual fees."></textarea>
 
-    <button onclick="getRecommendation()">Get Recommendation</button>
+        <div class="actions">
+          <button class="primary" onclick="submitForm()">Get Recommendation</button>
+          <button class="secondary" onclick="resetForm()">Reset</button>
+        </div>
 
-    <pre id="result">Result will appear here...</pre>
+        <div class="status" id="status"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Backend Response</h2>
+        <p class="mini">
+          This shows the raw JSON returned by your backend first. Once the backend is stable, you can render this into nice recommendation cards.
+        </p>
+        <div class="result-box" id="resultBox">Result will appear here...</div>
+      </div>
+    </div>
   </div>
 
-<script>
-async function getRecommendation() {
-  const payload = {
-    monthly_spend: Number(document.getElementById('monthly_spend').value) || null,
-    preferred_bank: document.getElementById('preferred_bank').value || null,
-    spend_categories: document.getElementById('categories').value.split(',').map(v => v.trim()).filter(Boolean),
-    desired_benefits: document.getElementById('benefits').value.split(',').map(v => v.trim()).filter(Boolean),
-    max_annual_fee: Number(document.getElementById('max_fee').value) || null,
-    notes: document.getElementById('notes').value || null
-  };
+  <script>
+    const selectedCategories = new Set();
+    const selectedBenefits = new Set();
 
-  document.getElementById('result').textContent = 'Loading...';
+    const categories = [
+      "fuel",
+      "dining",
+      "groceries",
+      "online_shopping",
+      "travel",
+      "utilities",
+      "upi"
+    ];
 
-  try {
-    const res = await fetch('/api/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const benefits = [
+      "cashback",
+      "reward_points",
+      "lounge",
+      "fuel_benefits",
+      "low_annual_fee",
+      "low_forex",
+      "milestone_benefits",
+      "travel_points",
+      "rupay_upi"
+    ];
 
-    const data = await res.json();
-    document.getElementById('result').textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    document.getElementById('result').textContent = 'Error: ' + err.message;
-  }
-}
-</script>
+    function createChips(containerId, items, selectedSet) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+
+      items.forEach((item) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chip";
+        btn.textContent = item;
+        btn.onclick = () => {
+          if (selectedSet.has(item)) {
+            selectedSet.delete(item);
+            btn.classList.remove("active");
+          } else {
+            selectedSet.add(item);
+            btn.classList.add("active");
+          }
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function resetForm() {
+      document.getElementById("monthlySpend").value = "";
+      document.getElementById("preferredBank").value = "";
+      document.getElementById("maxAnnualFee").value = "";
+      document.getElementById("preferredNetwork").value = "";
+      document.getElementById("notes").value = "";
+      document.getElementById("status").textContent = "";
+      document.getElementById("resultBox").textContent = "Result will appear here...";
+
+      selectedCategories.clear();
+      selectedBenefits.clear();
+
+      createChips("categoryChips", categories, selectedCategories);
+      createChips("benefitChips", benefits, selectedBenefits);
+    }
+
+    async function submitForm() {
+      const monthlySpend = document.getElementById("monthlySpend").value;
+      const preferredBank = document.getElementById("preferredBank").value;
+      const maxAnnualFee = document.getElementById("maxAnnualFee").value;
+      const preferredNetwork = document.getElementById("preferredNetwork").value;
+      const notes = document.getElementById("notes").value;
+
+      const payload = {
+        monthly_spend: monthlySpend ? Number(monthlySpend) : null,
+        preferred_bank: preferredBank || null,
+        preferred_network: preferredNetwork || null,
+        spend_categories: [...selectedCategories],
+        desired_benefits: [...selectedBenefits],
+        max_annual_fee: maxAnnualFee ? Number(maxAnnualFee) : null,
+        notes: notes || null
+      };
+
+      document.getElementById("status").textContent = "Calling backend...";
+      document.getElementById("resultBox").textContent = "Loading...";
+
+      try {
+        const response = await fetch("/api/recommend", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        document.getElementById("status").textContent =
+          response.ok ? "Success" : "Request failed";
+
+        document.getElementById("resultBox").textContent =
+          JSON.stringify(data, null, 2);
+      } catch (error) {
+        document.getElementById("status").textContent = "Error";
+        document.getElementById("resultBox").textContent =
+          "Request failed: " + error.message;
+      }
+    }
+
+    createChips("categoryChips", categories, selectedCategories);
+    createChips("benefitChips", benefits, selectedBenefits);
+  </script>
 </body>
 </html>

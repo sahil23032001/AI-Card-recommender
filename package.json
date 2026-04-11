@@ -1,0 +1,14 @@
+{
+  "name": "clever-card-finder-backend",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.52.0"
+  }
+}

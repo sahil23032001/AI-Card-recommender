@@ -4,9 +4,9 @@ import crypto from "crypto";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const LLM_PROVIDER = process.env.LLM_PROVIDER || "groq";
-const LLM_MODEL = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "huggingface";
+const LLM_MODEL = process.env.LLM_MODEL || "meta-llama/Llama-3.2-3B-Instruct";
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || "86400");
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -265,6 +265,13 @@ function scoreChunk(chunk, terms) {
 
 function safeJsonParse(text) {
   try {
+    // Try to extract JSON from markdown code blocks if present
+    const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[1]);
+    }
+    
+    // Try direct parsing
     return JSON.parse(text);
   } catch {
     return {
@@ -286,18 +293,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!GROQ_API_KEY) {
+  if (!HUGGINGFACE_API_KEY) {
     return res.status(500).json({
-      error: "GROQ_API_KEY is not configured on the server."
+      error: "HUGGINGFACE_API_KEY is not configured on the server."
     });
   }
 
   const debug = {
-    provider: "groq",
+    provider: "huggingface",
     model: LLM_MODEL,
     hasSupabaseUrl: !!process.env.SUPABASE_URL,
     hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasGroqKey: !!process.env.GROQ_API_KEY
+    hasHuggingFaceKey: !!process.env.HUGGINGFACE_API_KEY
   };
 
   try {
@@ -417,44 +424,69 @@ export default async function handler(req, res) {
       benefit_facts: factsByCard[card.id] || []
     }));
 
-    const finalMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: JSON.stringify({
-          user_profile: profile,
-          shortlisted_cards: shortlisted.map(({ _score, ...rest }) => rest),
-          official_evidence: evidence
-        })
-      }
-    ];
-
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        temperature: 0.2,
-        messages: finalMessages,
-        response_format: { type: "json_object" }
-      })
+    // Build the prompt for Hugging Face
+    const userPrompt = JSON.stringify({
+      user_profile: profile,
+      shortlisted_cards: shortlisted.map(({ _score, ...rest }) => rest),
+      official_evidence: evidence
     });
 
-    const raw = await groqRes.text();
+    const fullPrompt = `${SYSTEM_PROMPT}
 
-    if (!groqRes.ok) {
-      return res.status(groqRes.status).json({
+User Request:
+${userPrompt}
+
+Respond with ONLY valid JSON, no explanations before or after.`;
+
+    // Call Hugging Face Inference API
+    const hfRes = await fetch(
+      `https://api-inference.huggingface.co/models/${LLM_MODEL}`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${HUGGINGFACE_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          inputs: fullPrompt,
+          parameters: {
+            max_new_tokens: 2000,
+            temperature: 0.2,
+            top_p: 0.9,
+            return_full_text: false
+          }
+        })
+      }
+    );
+
+    const raw = await hfRes.text();
+
+    if (!hfRes.ok) {
+      return res.status(hfRes.status).json({
         error: "Recommendation failed",
         details: raw,
         debug
       });
     }
 
-    const data = JSON.parse(raw);
-    const content = data.choices?.[0]?.message?.content || "";
+    let content = "";
+    try {
+      const data = JSON.parse(raw);
+      
+      // Handle different response formats from Hugging Face
+      if (Array.isArray(data) && data[0]?.generated_text) {
+        content = data[0].generated_text;
+      } else if (data.generated_text) {
+        content = data.generated_text;
+      } else if (typeof data === 'string') {
+        content = data;
+      } else {
+        content = JSON.stringify(data);
+      }
+    } catch (e) {
+      content = raw;
+    }
+
     const recommendation = safeJsonParse(content);
 
     const responsePayload = {
@@ -470,7 +502,7 @@ export default async function handler(req, res) {
           request_hash: hash,
           normalized_profile: profile,
           response_json: responsePayload,
-          llm_provider: "groq",
+          llm_provider: "huggingface",
           llm_model: LLM_MODEL,
           updated_at: new Date().toISOString()
         },
@@ -479,13 +511,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       source: "llm",
-      provider: "groq",
+      provider: "huggingface",
       model: LLM_MODEL,
       debug,
       ...responsePayload
     });
   } catch (err) {
-    console.error("Groq API error:", err);
+    console.error("Hugging Face API error:", err);
     return res.status(500).json({
       error: "Recommendation failed",
       details: err.message,

@@ -1,13 +1,68 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: { persistSession: false, autoRefreshToken: false }
-  }
-);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "openrouter";
+const LLM_MODEL = process.env.LLM_MODEL || "google/gemini-2.0-flash-001";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || "86400");
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
+
+const SYSTEM_PROMPT = `
+You are a credit card recommendation engine for Indian credit cards.
+
+Your role is to recommend the best credit cards based on a user’s spending pattern, preferences, and optional issuer constraints.
+
+You must use only:
+1. The structured user profile
+2. The shortlisted candidate cards
+3. Official evidence from card documents, chunks, and benefit facts
+
+Do not invent benefits, exclusions, fee rules, milestone rules, reward rates, or lounge rules.
+
+Your job:
+- Compare shortlisted cards for the given user
+- Identify which card gives the best real-world value
+- Consider annual fee, fee waiver, lounge access, forex markup, reward/cashback fit, and milestone benefits
+- Mention milestone benefits explicitly if present
+- Mention whether the user is likely to unlock those milestone benefits based on annual spend
+- Mention caveats, exclusions, or missing information clearly
+
+Important:
+- Only recommend cards from the provided shortlisted list
+- If a detail is not clearly present in the evidence, say so
+- Do not assume the best card is the most premium one
+- Prefer fit for the user over generic popularity
+
+Return only valid JSON in this structure:
+{
+  "summary": "Short explanation of the overall recommendation.",
+  "best_card": {
+    "card_slug": "string",
+    "reason": "string",
+    "milestone_benefits": ["string"],
+    "caveats": ["string"]
+  },
+  "alternatives": [
+    {
+      "card_slug": "string",
+      "reason": "string",
+      "milestone_benefits": ["string"],
+      "caveats": ["string"]
+    }
+  ],
+  "confidence": "high | medium | low"
+}
+`;
 
 const BANKS = [
   "SBI Card",
@@ -150,7 +205,7 @@ function requestHash(profile) {
 function isFresh(row) {
   const updatedAt = row?.updated_at ? new Date(row.updated_at).getTime() : 0;
   const ageSeconds = (Date.now() - updatedAt) / 1000;
-  return ageSeconds <= 86400;
+  return ageSeconds <= CACHE_TTL_SECONDS;
 }
 
 function overlapCount(listA = [], listB = []) {
@@ -231,17 +286,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const GROQ_API_KEY = process.env.GROQ_API_KEY;
-  if (!GROQ_API_KEY) {
-    return res.status(500).json({ error: "GROQ_API_KEY is not configured on the server." });
+  if (!OPENROUTER_API_KEY) {
+    return res.status(500).json({
+      error: "OPENROUTER_API_KEY is not configured on the server."
+    });
   }
 
   const debug = {
-    provider: "groq",
-    model: "llama-3.3-70b-versatile",
+    provider: "openrouter",
+    model: LLM_MODEL,
     hasSupabaseUrl: !!process.env.SUPABASE_URL,
     hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasGroqKey: !!process.env.GROQ_API_KEY
+    hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY
   };
 
   try {
@@ -373,25 +429,24 @@ export default async function handler(req, res) {
       }
     ];
 
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const openrouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: LLM_MODEL,
         temperature: 0.2,
-        max_tokens: 900,
         messages: finalMessages,
         response_format: { type: "json_object" }
       })
     });
 
-    const raw = await groqRes.text();
+    const raw = await openrouterRes.text();
 
-    if (!groqRes.ok) {
-      return res.status(groqRes.status).json({
+    if (!openrouterRes.ok) {
+      return res.status(openrouterRes.status).json({
         error: "Recommendation failed",
         details: raw,
         debug
@@ -415,8 +470,8 @@ export default async function handler(req, res) {
           request_hash: hash,
           normalized_profile: profile,
           response_json: responsePayload,
-          llm_provider: "groq",
-          llm_model: "llama-3.3-70b-versatile",
+          llm_provider: "openrouter",
+          llm_model: LLM_MODEL,
           updated_at: new Date().toISOString()
         },
         { onConflict: "request_hash" }
@@ -424,13 +479,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       source: "llm",
-      provider: "groq",
-      model: "llama-3.3-70b-versatile",
+      provider: "openrouter",
+      model: LLM_MODEL,
       debug,
       ...responsePayload
     });
   } catch (err) {
-    console.error("Groq API error:", err);
+    console.error("OpenRouter API error:", err);
     return res.status(500).json({
       error: "Recommendation failed",
       details: err.message,

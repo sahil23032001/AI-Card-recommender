@@ -4,9 +4,9 @@ import crypto from "crypto";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const LLM_PROVIDER = process.env.LLM_PROVIDER || "openrouter";
-const LLM_MODEL = process.env.LLM_MODEL || "google/gemini-2.0-flash-001";
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "groq";
+const LLM_MODEL = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || "86400");
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -20,7 +20,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 const SYSTEM_PROMPT = `
 You are a credit card recommendation engine for Indian credit cards.
 
-Your role is to recommend the best credit cards based on a user’s spending pattern, preferences, and optional issuer constraints.
+Your role is to recommend the best credit cards based on a user's spending pattern, preferences, and optional issuer constraints.
 
 You must use only:
 1. The structured user profile
@@ -286,18 +286,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!OPENROUTER_API_KEY) {
+  if (!GROQ_API_KEY) {
     return res.status(500).json({
-      error: "OPENROUTER_API_KEY is not configured on the server."
+      error: "GROQ_API_KEY is not configured on the server."
     });
   }
 
   const debug = {
-    provider: "openrouter",
+    provider: "groq",
     model: LLM_MODEL,
     hasSupabaseUrl: !!process.env.SUPABASE_URL,
     hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY
+    hasGroqKey: !!process.env.GROQ_API_KEY
   };
 
   try {
@@ -429,11 +429,11 @@ export default async function handler(req, res) {
       }
     ];
 
-    const openrouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`
+        "Authorization": `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
         model: LLM_MODEL,
@@ -443,10 +443,10 @@ export default async function handler(req, res) {
       })
     });
 
-    const raw = await openrouterRes.text();
+    const raw = await groqRes.text();
 
-    if (!openrouterRes.ok) {
-      return res.status(openrouterRes.status).json({
+    if (!groqRes.ok) {
+      return res.status(groqRes.status).json({
         error: "Recommendation failed",
         details: raw,
         debug
@@ -470,7 +470,7 @@ export default async function handler(req, res) {
           request_hash: hash,
           normalized_profile: profile,
           response_json: responsePayload,
-          llm_provider: "openrouter",
+          llm_provider: "groq",
           llm_model: LLM_MODEL,
           updated_at: new Date().toISOString()
         },
@@ -479,13 +479,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       source: "llm",
-      provider: "openrouter",
+      provider: "groq",
       model: LLM_MODEL,
       debug,
       ...responsePayload
     });
   } catch (err) {
-    console.error("OpenRouter API error:", err);
+    console.error("Groq API error:", err);
     return res.status(500).json({
       error: "Recommendation failed",
       details: err.message,

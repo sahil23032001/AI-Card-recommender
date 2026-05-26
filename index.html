@@ -890,14 +890,14 @@ const emptyState = document.getElementById("emptyState");
 const results = document.getElementById("results");
 const errorText = document.getElementById("errorText");
 
-const BACKEND_URL = "https://cc-backend-rl6e.onrender.com/recommend";
+const BACKEND_URL = "https://your-backend-url.com/recommend";
 
 function allowWholeNumbers(e) {
   e.target.value = e.target.value.replace(/[^0-9]/g, "");
 }
 
 function validateCreditScore(e) {
-  let val = e.target.value.replace(/[^0-9]/g, "");
+  const val = e.target.value.replace(/[^0-9]/g, "");
   e.target.value = val.slice(0, 3);
 }
 
@@ -905,12 +905,81 @@ expenseInput.addEventListener("input", allowWholeNumbers);
 maxFeeInput.addEventListener("input", allowWholeNumbers);
 creditScoreInput.addEventListener("input", validateCreditScore);
 
+function normalizeBackendResponse(data) {
+  const result = data.result || data;
+
+  const rankedCards = result.ranked_cards || [];
+  const finalDecision = result.final_decision || {};
+  const recommended = finalDecision.recommended_card || {};
+
+  if (!rankedCards.length && !recommended.card_name) {
+    throw new Error("No cards returned from backend");
+  }
+
+  const cards = [];
+
+  if (recommended.card_name) {
+    const matchedCard = rankedCards.find(
+      c => c.card_id === recommended.card_id
+    );
+
+    cards.push({
+      name: recommended.card_name,
+      issuer: recommended.issuer || matchedCard?.issuer || "Unknown Issuer",
+      score: matchedCard?.total_score
+        ? Math.round(matchedCard.total_score)
+        : 95,
+      confidence: recommended.confidence || "medium",
+      rewards: matchedCard?.reward_type || [],
+      benefits: recommended.why_it_wins || [],
+      evidence: matchedCard?.evidence_points || [],
+      decisionSummary: finalDecision.decision_summary || "",
+      metrics: {
+        cashback: matchedCard?.estimated_annual_value
+          ? `₹${Math.round(matchedCard.estimated_annual_value)} value`
+          : "N/A",
+        rewardRate: matchedCard?.reward_type?.join(", ") || "N/A",
+        welcomeBonus: matchedCard?.annual_fee_waiver_text || "N/A"
+      }
+    });
+  }
+
+  rankedCards.forEach(card => {
+    if (card.card_id === recommended.card_id) return;
+
+    cards.push({
+      name: card.card_name || "Unknown Card",
+      issuer: card.issuer || "Unknown Issuer",
+      score: card.total_score ? Math.round(card.total_score) : 0,
+      confidence: "medium",
+      rewards: card.reward_type || [],
+      benefits: card.key_benefits
+        ? [card.key_benefits]
+        : [],
+      evidence: card.evidence_points || [],
+      decisionSummary: "",
+      metrics: {
+        cashback: card.estimated_annual_value
+          ? `₹${Math.round(card.estimated_annual_value)} value`
+          : "N/A",
+        rewardRate: card.reward_type?.join(", ") || "N/A",
+        welcomeBonus: card.annual_fee_waiver_text || "N/A"
+      }
+    });
+  });
+
+  return cards;
+}
+
 function renderResults(recs) {
   const best = recs[0];
   const rest = recs.slice(1);
 
-  document.getElementById("bestName").textContent = best.name || "Unknown Card";
-  document.getElementById("bestIssuer").textContent = best.issuer || "Unknown Issuer";
+  document.getElementById("bestName").textContent =
+    best.name || "Unknown Card";
+
+  document.getElementById("bestIssuer").textContent =
+    best.issuer || "Unknown Issuer";
 
   const dot = document.getElementById("confidenceDot");
   dot.className = "confidence-dot";
@@ -946,17 +1015,17 @@ function renderResults(recs) {
 
       <div class="card-metrics">
         <div class="metric">
-          <div class="metric-label">Cashback</div>
+          <div class="metric-label">Estimated Value</div>
           <div class="metric-value">${card.metrics?.cashback || "N/A"}</div>
         </div>
 
         <div class="metric">
-          <div class="metric-label">Reward Rate</div>
+          <div class="metric-label">Reward Type</div>
           <div class="metric-value">${card.metrics?.rewardRate || "N/A"}</div>
         </div>
 
         <div class="metric">
-          <div class="metric-label">Welcome Bonus</div>
+          <div class="metric-label">Fee Waiver</div>
           <div class="metric-value">${card.metrics?.welcomeBonus || "N/A"}</div>
         </div>
       </div>
@@ -984,13 +1053,13 @@ form.addEventListener("submit", async function(e) {
   results.classList.add("hidden");
   emptyState.classList.add("hidden");
 
-  const expense = parseInt(expenseInput.value) || 0;
+  const monthlyExpense = parseInt(expenseInput.value) || 0;
   const expenseType = expenseTypeInput.value;
   const desiredOutput = desiredOutputInput.value;
-  const maxFee = parseInt(maxFeeInput.value) || 5000;
+  const maxAnnualFee = parseInt(maxFeeInput.value) || 0;
   const creditScore = parseInt(creditScoreInput.value) || 0;
 
-  if (!expense || !expenseType || !desiredOutput) {
+  if (!monthlyExpense || !expenseType || !desiredOutput || !maxAnnualFee) {
     errorText.textContent = "Please fill all required fields";
     errorState.classList.remove("hidden");
     return;
@@ -1005,6 +1074,18 @@ form.addEventListener("submit", async function(e) {
   submitBtn.disabled = true;
   loadingState.classList.remove("hidden");
 
+  const payload = {
+    monthly_expense: monthlyExpense,
+    expense_type: expenseType,
+    desired_output: desiredOutput,
+    max_annual_fee: maxAnnualFee,
+    credit_score: creditScore,
+    use_cache: false,
+    debug: false
+  };
+
+  console.log("Sending payload:", payload);
+
   try {
     const response = await fetch(`${BACKEND_URL}?t=${Date.now()}`, {
       method: "POST",
@@ -1013,30 +1094,22 @@ form.addEventListener("submit", async function(e) {
         "Cache-Control": "no-cache"
       },
       cache: "no-store",
-      body: JSON.stringify({
-        expense: expense,
-        expense_type: expenseType,
-        desired_output: desiredOutput,
-        max_fee: maxFee,
-        credit_score: creditScore
-      })
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
     if (!response.ok) {
       console.error("Backend validation error:", data);
-      throw new Error(data.detail ? JSON.stringify(data.detail) : "Backend error");
+      throw new Error(JSON.stringify(data));
     }
 
-    if (!data.recommendations || data.recommendations.length === 0) {
-      throw new Error("No recommendations returned from backend");
-    }
+    const recommendations = normalizeBackendResponse(data);
 
     loadingState.classList.add("hidden");
     submitBtn.disabled = false;
 
-    renderResults(data.recommendations);
+    renderResults(recommendations);
 
   } catch (error) {
     loadingState.classList.add("hidden");
@@ -1045,7 +1118,7 @@ form.addEventListener("submit", async function(e) {
     console.error("Frontend error:", error);
 
     errorText.textContent =
-      "Backend error. Check request fields or server logs.";
+      "Backend error. Check console/server logs for details.";
     errorState.classList.remove("hidden");
   }
 });

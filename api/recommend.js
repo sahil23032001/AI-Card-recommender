@@ -31,7 +31,15 @@ export default async function handler(req, res) {
       Movies: "movies",
       Fuel: "fuel",
       Grocery: "grocery",
-      Online: "online"
+      Online: "online",
+      shopping: "shopping",
+      dining: "dining",
+      travel: "travel",
+      hotel: "hotel",
+      movies: "movies",
+      fuel: "fuel",
+      grocery: "grocery",
+      online: "online"
     };
 
     const outputMap = {
@@ -43,20 +51,31 @@ export default async function handler(req, res) {
       "Movie Tickets": "movie",
       "Fuel Savings": "fuel",
       "Lounge Access": "lounge",
-      "General Rewards": "rewards"
+      "General Rewards": "rewards",
+      cashback: "cashback",
+      shopping: "shopping",
+      dining: "dining",
+      travel: "travel",
+      hotel: "hotel",
+      movie: "movie",
+      movies: "movie",
+      fuel: "fuel",
+      lounge: "lounge",
+      rewards: "rewards"
     };
+
+    const rawExpenseType = body.expense_type ?? body.expenseType ?? "general";
+    const rawDesiredOutput = body.desired_output ?? body.desiredOutput ?? "general";
 
     const payload = {
       monthly_expense: Number(body.monthly_expense ?? body.expense),
       expense_type:
-        expenseTypeMap[body.expense_type] ||
-        expenseTypeMap[body.expenseType] ||
-        String(body.expense_type || body.expenseType || "general").toLowerCase(),
+        expenseTypeMap[rawExpenseType] ||
+        String(rawExpenseType).trim().toLowerCase(),
 
       desired_output:
-        outputMap[body.desired_output] ||
-        outputMap[body.desiredOutput] ||
-        String(body.desired_output || body.desiredOutput || "general").toLowerCase(),
+        outputMap[rawDesiredOutput] ||
+        String(rawDesiredOutput).trim().toLowerCase(),
 
       max_annual_fee: Number(body.max_annual_fee ?? body.maxFee),
       credit_score: Number(body.credit_score ?? body.creditScore),
@@ -64,10 +83,28 @@ export default async function handler(req, res) {
       debug: body.debug ?? false
     };
 
+    if (
+      !payload.monthly_expense ||
+      Number.isNaN(payload.monthly_expense) ||
+      !payload.expense_type ||
+      !payload.desired_output ||
+      Number.isNaN(payload.max_annual_fee) ||
+      !payload.credit_score ||
+      Number.isNaN(payload.credit_score)
+    ) {
+      return res.status(400).json({
+        error: "Invalid payload before backend call",
+        received_body: body,
+        converted_payload: payload
+      });
+    }
+
+    const cleanBackendUrl = BACKEND_URL.replace(/\/$/, "");
+
     console.log("Proxy received:", body);
     console.log("Proxy forwarding:", payload);
 
-    const backendResponse = await fetch(`${BACKEND_URL}/recommend`, {
+    const backendResponse = await fetch(`${cleanBackendUrl}/recommend`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

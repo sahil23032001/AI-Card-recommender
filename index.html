@@ -874,8 +874,9 @@
         </div>
     </div>
 
-    <script>
+<script>
 const form = document.getElementById("cardForm");
+
 const expenseInput = document.getElementById("expense");
 const expenseTypeInput = document.getElementById("expenseType");
 const desiredOutputInput = document.getElementById("desiredOutput");
@@ -908,8 +909,8 @@ function renderResults(recs) {
   const best = recs[0];
   const rest = recs.slice(1);
 
-  document.getElementById("bestName").textContent = best.name;
-  document.getElementById("bestIssuer").textContent = best.issuer;
+  document.getElementById("bestName").textContent = best.name || "Unknown Card";
+  document.getElementById("bestIssuer").textContent = best.issuer || "Unknown Issuer";
 
   const dot = document.getElementById("confidenceDot");
   dot.className = "confidence-dot";
@@ -918,13 +919,13 @@ function renderResults(recs) {
   if (best.confidence === "low") dot.classList.add("low");
 
   document.getElementById("confidenceText").textContent =
-    `${best.score}% match · ${best.confidence} confidence`;
+    `${best.score || 0}% match · ${best.confidence || "medium"} confidence`;
 
   document.getElementById("bestBenefits").innerHTML =
-    best.benefits.map(b => `<li>${b}</li>`).join("");
+    (best.benefits || []).map(b => `<li>${b}</li>`).join("");
 
   document.getElementById("bestRewards").innerHTML =
-    best.rewards.map(r => `<span class="reward-tag">${r}</span>`).join("");
+    (best.rewards || []).map(r => `<span class="reward-tag">${r}</span>`).join("");
 
   if (best.decisionSummary) {
     document.getElementById("bestSummary").classList.remove("hidden");
@@ -937,10 +938,10 @@ function renderResults(recs) {
     <div class="ranked-card">
       <div class="ranked-card-header">
         <div class="ranked-card-title">
-          <h3>${card.name}</h3>
-          <p>${card.issuer}</p>
+          <h3>${card.name || "Unknown Card"}</h3>
+          <p>${card.issuer || "Unknown Issuer"}</p>
         </div>
-        <div class="card-score">${card.score}</div>
+        <div class="card-score">${card.score || 0}</div>
       </div>
 
       <div class="card-metrics">
@@ -1013,22 +1014,23 @@ form.addEventListener("submit", async function(e) {
       },
       cache: "no-store",
       body: JSON.stringify({
-        expense,
-        expenseType,
-        desiredOutput,
-        maxFee,
-        creditScore
+        expense: expense,
+        expense_type: expenseType,
+        desired_output: desiredOutput,
+        max_fee: maxFee,
+        credit_score: creditScore
       })
     });
 
-    if (!response.ok) {
-      throw new Error("Backend error");
-    }
-
     const data = await response.json();
 
+    if (!response.ok) {
+      console.error("Backend validation error:", data);
+      throw new Error(data.detail ? JSON.stringify(data.detail) : "Backend error");
+    }
+
     if (!data.recommendations || data.recommendations.length === 0) {
-      throw new Error("No recommendations found");
+      throw new Error("No recommendations returned from backend");
     }
 
     loadingState.classList.add("hidden");
@@ -1039,9 +1041,12 @@ form.addEventListener("submit", async function(e) {
   } catch (error) {
     loadingState.classList.add("hidden");
     submitBtn.disabled = false;
-    errorText.textContent = "Backend not reachable or returned invalid data.";
+
+    console.error("Frontend error:", error);
+
+    errorText.textContent =
+      "Backend error. Check request fields or server logs.";
     errorState.classList.remove("hidden");
-    console.error(error);
   }
 });
 </script>

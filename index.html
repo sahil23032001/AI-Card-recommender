@@ -875,265 +875,175 @@
     </div>
 
     <script>
-        // Card database
-        const cards = [
-            {
-                name: "HDFC Regalia Gold",
-                issuer: "HDFC Bank",
-                score: 95,
-                confidence: "high",
-                annualFee: "₹2,500",
-                rewards: ["4X Rewards on Travel", "2X on Dining", "Lounge Access"],
-                benefits: [
-                    "Complimentary airport lounge access worldwide",
-                    "Up to 5% cashback on partner brands",
-                    "Milestone rewards every quarter"
-                ],
-                evidence: [
-                    "Matches your travel spending pattern",
-                    "Annual fee within your budget",
-                    "Credit score qualifies for premium tier"
-                ],
-                decisionSummary: "Based on your monthly spend and preference, this card maximizes value with strong travel rewards and lounge access, fitting well within your annual fee budget.",
-                metrics: { cashback: "5%", rewardRate: "4X", welcomeBonus: "10,000 pts" }
-            },
-            {
-                name: "SBI SimplyCLICK",
-                issuer: "SBI Card",
-                score: 88,
-                confidence: "high",
-                annualFee: "₹499",
-                rewards: ["10X on Online Shopping", "5X on Entertainment", "Amazon Vouchers"],
-                benefits: [
-                    "Welcome e-voucher worth ₹500",
-                    "Milestone rewards at annual spends",
-                    "Fuel surcharge waiver"
-                ],
-                evidence: [
-                    "Great for online spending habits",
-                    "Low annual fee with high online rewards",
-                    "E-commerce partnerships add value"
-                ],
-                metrics: { cashback: "2.5%", rewardRate: "10X", welcomeBonus: "₹500" }
-            },
-            {
-                name: "Axis Flipkart",
-                issuer: "Axis Bank",
-                score: 82,
-                confidence: "medium",
-                annualFee: "₹500",
-                rewards: ["5% on Flipkart", "4% on Preferred Partners", "1.5% Unlimited Cashback"],
-                benefits: [
-                    "Unlimited cashback — no capping",
-                    "No reward point redemption hassle",
-                    "Instant discount on Flipkart orders"
-                ],
-                evidence: [
-                    "Cashback model suits your preference",
-                    "No annual fee in first year",
-                    "Good for mixed spending categories"
-                ],
-                metrics: { cashback: "5%", rewardRate: "1.5X", welcomeBonus: "N/A" }
-            },
-            {
-                name: "ICICI Amazon Pay",
-                issuer: "ICICI Bank",
-                score: 78,
-                confidence: "medium",
-                annualFee: "₹0 (LTF)",
-                rewards: ["5% on Amazon", "2% on Digital Payments", "1% Others"],
-                benefits: [
-                    "Lifetime free — zero annual fee",
-                    "Instant Amazon Pay balance credit",
-                    "Works great for everyday purchases"
-                ],
-                evidence: [
-                    "Lifetime free suits budget-conscious users",
-                    "Amazon cashback matches online spending",
-                    "Minimum credit score requirement met"
-                ],
-                metrics: { cashback: "5%", rewardRate: "2X", welcomeBonus: "₹750" }
-            }
-        ];
+const form = document.getElementById("cardForm");
+const expenseInput = document.getElementById("expense");
+const expenseTypeInput = document.getElementById("expenseType");
+const desiredOutputInput = document.getElementById("desiredOutput");
+const maxFeeInput = document.getElementById("maxFee");
+const creditScoreInput = document.getElementById("creditScore");
 
-        // DOM elements
-        const form = document.getElementById('cardForm');
-        const expenseInput = document.getElementById('expense');
-        const expenseTypeInput = document.getElementById('expenseType');
-        const desiredOutputInput = document.getElementById('desiredOutput');
-        const maxFeeInput = document.getElementById('maxFee');
-        const creditScoreInput = document.getElementById('creditScore');
-        const submitBtn = document.getElementById('submitBtn');
-        const loadingState = document.getElementById('loadingState');
-        const errorState = document.getElementById('errorState');
-        const emptyState = document.getElementById('emptyState');
-        const results = document.getElementById('results');
-        const errorText = document.getElementById('errorText');
+const submitBtn = document.getElementById("submitBtn");
+const loadingState = document.getElementById("loadingState");
+const errorState = document.getElementById("errorState");
+const emptyState = document.getElementById("emptyState");
+const results = document.getElementById("results");
+const errorText = document.getElementById("errorText");
 
-        // Only allow whole numbers
-        function allowWholeNumbers(e) {
-            e.target.value = e.target.value.replace(/[^0-9]/g, '');
-        }
+const BACKEND_URL = "https://cc-backend-rl6e.onrender.com/recommend";
 
-        // Credit score validation (650-800)
-        function validateCreditScore(e) {
-            let val = e.target.value.replace(/[^0-9]/g, '');
-            const num = parseInt(val);
-            if (val === '' || num > 800) {
-                e.target.value = val.slice(0, 3);
-            } else {
-                e.target.value = val;
-            }
-        }
+function allowWholeNumbers(e) {
+  e.target.value = e.target.value.replace(/[^0-9]/g, "");
+}
 
-        // Attach input filters
-        expenseInput.addEventListener('input', allowWholeNumbers);
-        maxFeeInput.addEventListener('input', allowWholeNumbers);
-        creditScoreInput.addEventListener('input', validateCreditScore);
+function validateCreditScore(e) {
+  let val = e.target.value.replace(/[^0-9]/g, "");
+  e.target.value = val.slice(0, 3);
+}
 
-        // Get recommendations logic
-        function getRecommendations(expense, expenseType, desiredOutput, maxFee, creditScore) {
-            return cards.map(card => {
-                let adjusted = card.score;
-                if (expenseType === "Travel" && card.name.includes("Regalia")) adjusted += 3;
-                if (expenseType === "Online" && card.name.includes("SimplyCLICK")) adjusted += 3;
-                if (desiredOutput === "Cashback" && card.name.includes("Flipkart")) adjusted += 3;
-                if (creditScore < 700) adjusted -= 5;
-                if (expense > 50000) adjusted += 2;
-                return { ...card, score: Math.min(99, Math.max(60, adjusted)) };
-            }).sort((a, b) => b.score - a.score);
-        }
+expenseInput.addEventListener("input", allowWholeNumbers);
+maxFeeInput.addEventListener("input", allowWholeNumbers);
+creditScoreInput.addEventListener("input", validateCreditScore);
 
-        // Render results
-        function renderResults(recs) {
-            const best = recs[0];
-            const rest = recs.slice(1);
+function renderResults(recs) {
+  const best = recs[0];
+  const rest = recs.slice(1);
 
-            // Best match
-            document.getElementById('bestName').textContent = best.name;
-            document.getElementById('bestIssuer').textContent = best.issuer;
-            
-            const dot = document.getElementById('confidenceDot');
-            dot.className = 'confidence-dot';
-            if (best.confidence === 'medium') dot.classList.add('medium');
-            if (best.confidence === 'low') dot.classList.add('low');
-            
-            document.getElementById('confidenceText').textContent = `${best.score}% match · ${best.confidence} confidence`;
+  document.getElementById("bestName").textContent = best.name;
+  document.getElementById("bestIssuer").textContent = best.issuer;
 
-            // Benefits
-            const benefitsList = document.getElementById('bestBenefits');
-            benefitsList.innerHTML = best.benefits.map(b => `<li>${b}</li>`).join('');
+  const dot = document.getElementById("confidenceDot");
+  dot.className = "confidence-dot";
 
-            // Rewards
-            const rewardsContainer = document.getElementById('bestRewards');
-            rewardsContainer.innerHTML = best.rewards.map(r => `<span class="reward-tag">${r}</span>`).join('');
+  if (best.confidence === "medium") dot.classList.add("medium");
+  if (best.confidence === "low") dot.classList.add("low");
 
-            // Summary
-            if (best.decisionSummary) {
-                document.getElementById('bestSummary').classList.remove('hidden');
-                document.getElementById('summaryText').textContent = best.decisionSummary;
-            } else {
-                document.getElementById('bestSummary').classList.add('hidden');
-            }
+  document.getElementById("confidenceText").textContent =
+    `${best.score}% match · ${best.confidence} confidence`;
 
-            // Other cards
-            const rankedContainer = document.getElementById('rankedCards');
-            rankedContainer.innerHTML = rest.map(card => `
-                <div class="ranked-card">
-                    <div class="ranked-card-header">
-                        <div class="ranked-card-title">
-                            <h3>${card.name}</h3>
-                            <p>${card.issuer}</p>
-                        </div>
-                        <div class="card-score">${card.score}</div>
-                    </div>
-                    
-                    <div class="card-metrics">
-                        ${card.metrics.cashback ? `
-                            <div class="metric">
-                                <div class="metric-label">Cashback</div>
-                                <div class="metric-value">${card.metrics.cashback}</div>
-                            </div>
-                        ` : ''}
-                        ${card.metrics.rewardRate ? `
-                            <div class="metric">
-                                <div class="metric-label">Reward Rate</div>
-                                <div class="metric-value">${card.metrics.rewardRate}</div>
-                            </div>
-                        ` : ''}
-                        ${card.metrics.welcomeBonus ? `
-                            <div class="metric">
-                                <div class="metric-label">Welcome Bonus</div>
-                                <div class="metric-value">${card.metrics.welcomeBonus}</div>
-                            </div>
-                        ` : ''}
-                    </div>
+  document.getElementById("bestBenefits").innerHTML =
+    best.benefits.map(b => `<li>${b}</li>`).join("");
 
-                    <div class="reward-tags">
-                        ${card.rewards.map(r => `<span class="reward-tag">${r}</span>`).join('')}
-                    </div>
+  document.getElementById("bestRewards").innerHTML =
+    best.rewards.map(r => `<span class="reward-tag">${r}</span>`).join("");
 
-                    <div class="evidence-box">
-                        <h5>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"/>
-                            </svg>
-                            Why this card
-                        </h5>
-                        <ul class="evidence-list">
-                            ${card.evidence.map(e => `<li>${e}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>
-            `).join('');
+  if (best.decisionSummary) {
+    document.getElementById("bestSummary").classList.remove("hidden");
+    document.getElementById("summaryText").textContent = best.decisionSummary;
+  } else {
+    document.getElementById("bestSummary").classList.add("hidden");
+  }
 
-            // Show results
-            results.classList.remove('hidden');
-        }
+  document.getElementById("rankedCards").innerHTML = rest.map(card => `
+    <div class="ranked-card">
+      <div class="ranked-card-header">
+        <div class="ranked-card-title">
+          <h3>${card.name}</h3>
+          <p>${card.issuer}</p>
+        </div>
+        <div class="card-score">${card.score}</div>
+      </div>
 
-        // Form submit
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Reset states
-            errorState.classList.add('hidden');
-            results.classList.add('hidden');
-            emptyState.classList.add('hidden');
-            
-            // Get values
-            const expense = parseInt(expenseInput.value) || 0;
-            const expenseType = expenseTypeInput.value;
-            const desiredOutput = desiredOutputInput.value;
-            const maxFee = parseInt(maxFeeInput.value) || 5000;
-            const creditScore = parseInt(creditScoreInput.value) || 0;
+      <div class="card-metrics">
+        <div class="metric">
+          <div class="metric-label">Cashback</div>
+          <div class="metric-value">${card.metrics?.cashback || "N/A"}</div>
+        </div>
 
-            // Validation
-            if (!expense || !expenseType || !desiredOutput) {
-                errorText.textContent = 'Please fill all required fields';
-                errorState.classList.remove('hidden');
-                return;
-            }
+        <div class="metric">
+          <div class="metric-label">Reward Rate</div>
+          <div class="metric-value">${card.metrics?.rewardRate || "N/A"}</div>
+        </div>
 
-            if (creditScore < 650 || creditScore > 800) {
-                errorText.textContent = 'Credit score must be between 650 and 800';
-                errorState.classList.remove('hidden');
-                return;
-            }
+        <div class="metric">
+          <div class="metric-label">Welcome Bonus</div>
+          <div class="metric-value">${card.metrics?.welcomeBonus || "N/A"}</div>
+        </div>
+      </div>
 
-            // Show loading
-            submitBtn.disabled = true;
-            loadingState.classList.remove('hidden');
+      <div class="reward-tags">
+        ${(card.rewards || []).map(r => `<span class="reward-tag">${r}</span>`).join("")}
+      </div>
 
-            // Simulate API call
-            setTimeout(() => {
-                const recs = getRecommendations(expense, expenseType, desiredOutput, maxFee, creditScore);
-                
-                loadingState.classList.add('hidden');
-                submitBtn.disabled = false;
-                
-                renderResults(recs);
-            }, 1500);
-        });
-    </script>
+      <div class="evidence-box">
+        <h5>Why this card</h5>
+        <ul class="evidence-list">
+          ${(card.evidence || []).map(e => `<li>${e}</li>`).join("")}
+        </ul>
+      </div>
+    </div>
+  `).join("");
+
+  results.classList.remove("hidden");
+}
+
+form.addEventListener("submit", async function(e) {
+  e.preventDefault();
+
+  errorState.classList.add("hidden");
+  results.classList.add("hidden");
+  emptyState.classList.add("hidden");
+
+  const expense = parseInt(expenseInput.value) || 0;
+  const expenseType = expenseTypeInput.value;
+  const desiredOutput = desiredOutputInput.value;
+  const maxFee = parseInt(maxFeeInput.value) || 5000;
+  const creditScore = parseInt(creditScoreInput.value) || 0;
+
+  if (!expense || !expenseType || !desiredOutput) {
+    errorText.textContent = "Please fill all required fields";
+    errorState.classList.remove("hidden");
+    return;
+  }
+
+  if (creditScore < 650 || creditScore > 800) {
+    errorText.textContent = "Credit score must be between 650 and 800";
+    errorState.classList.remove("hidden");
+    return;
+  }
+
+  submitBtn.disabled = true;
+  loadingState.classList.remove("hidden");
+
+  try {
+    const response = await fetch(`${BACKEND_URL}?t=${Date.now()}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache"
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        expense,
+        expenseType,
+        desiredOutput,
+        maxFee,
+        creditScore
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("Backend error");
+    }
+
+    const data = await response.json();
+
+    if (!data.recommendations || data.recommendations.length === 0) {
+      throw new Error("No recommendations found");
+    }
+
+    loadingState.classList.add("hidden");
+    submitBtn.disabled = false;
+
+    renderResults(data.recommendations);
+
+  } catch (error) {
+    loadingState.classList.add("hidden");
+    submitBtn.disabled = false;
+    errorText.textContent = "Backend not reachable or returned invalid data.";
+    errorState.classList.remove("hidden");
+    console.error(error);
+  }
+});
+</script>
 </body>
 </html>
